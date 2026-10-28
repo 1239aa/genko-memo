@@ -505,8 +505,8 @@ $('#docName').onclick=()=>renameFile(curId);
 $('#docMore').onclick=()=>{
   const id=curId;
   openModal({title:'メニュー',stack:true,actions:[
-    {label:'テキストをコピー（段落のまま）',kind:'plain',run:()=>copyText(false)},
-    {label:'テキストをコピー（行ごとに改行）',kind:'plain',run:()=>copyText(true)},
+    {label:'テキストだけコピー',kind:'plain',run:()=>copyText(false)},
+    {label:'テキストだけコピー（12字ごとに改行）',kind:'plain',run:()=>copyText(true)},
     {label:'名前を変更',kind:'plain',run:()=>{closeModal();renameFile(id);return false}},
     {label:'スマホにテキストで保存（.txt）',kind:'plain',run:()=>{closeModal();saveTxt(cur());return false}},
     {label:'この原稿を削除',kind:'plain',run:()=>{closeModal();deleteFile(id);return false}},
@@ -575,9 +575,22 @@ pagesEl.addEventListener('pointerup',endDrag);
 pagesEl.addEventListener('pointercancel',endDrag);
 
 /* ---------- copy ---------- */
+// text only: keeps line breaks, one blank line between pages, no shading/marks
+function pageText(f,wrapped){
+  let out='',lastPi=-1,lastPage=-1;
+  layout(f.paras).forEach((r,i)=>{
+    if(r.fill)return;
+    const pg=Math.floor(i/ROWS),s=r.ch.map(t=>t.s).join('');
+    if(lastPage<0)out=s;
+    else out+=(pg!==lastPage?'\n\n':(r.pi!==lastPi||wrapped)?'\n':'')+s;
+    lastPi=r.pi;lastPage=pg;
+  });
+  return out;
+}
+const plainText=f=>pageText(f,false), wrappedText=f=>pageText(f,true);
 function copyText(wrapped){
   const f=cur();
-  const text=wrapped?layout(f.paras).filter(r=>!r.fill).map(r=>r.ch.map(t=>t.s).join('')).join('\n'):f.paras.map(p=>p.t).join('\n');
+  const text=wrapped?wrappedText(f):plainText(f);
   const fallback=()=>{closeModal();openModal({title:'テキスト',
     html:`<textarea id="copyTa" class="field" rows="8" readonly>${esc(text)}</textarea><p class="hint">全選択してコピーしてください。</p>`,
     onReady:d=>{const t=d.querySelector('#copyTa');t.focus();t.select()},actions:[{label:'閉じる',kind:'primary'}]})};
@@ -615,7 +628,7 @@ async function saveFile(filename,data){
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;document.body.appendChild(a);a.click();
   setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500);toast('保存しました');
 }
-function saveTxt(f){saveFile(safeName(f.name)+'.txt',f.paras.map(p=>p.t).join('\n'))}
+function saveTxt(f){saveFile(safeName(f.name)+'.txt',plainText(f))}
 function saveBackup(){
   persist();
   saveFile(`原稿メモ_バックアップ_${today()}.json`,JSON.stringify({app:'genko-memo',version:1,savedAt:Date.now(),files:db.files},null,1));
